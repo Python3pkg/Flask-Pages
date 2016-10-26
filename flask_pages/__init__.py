@@ -40,7 +40,7 @@ _datastore = LocalProxy(lambda: _page.datastore)
 
 _default_config = {
     'DATABASE': 'sqlite',
-    'DATABASE_URI': 'sqlite:///page.db',
+    'DATABASE_URI': 'sqlite:///fpages.db',
     'DATABASE_TABLE_PREFIX': 'fpages',
     'SUBDOMAIN': None,
     'URL_PREFIX': None,
@@ -193,19 +193,29 @@ class SQLAlchemyDatastore(Datastore):
     def drop_all(self):
         self.db.drop_all()
 
+    def get(self, model, identifier, id_column="id"):
+        if type(identifier) == str:
+            if identifier.isdigit():
+                return self.db.query(model).get(int(identifier))
+            else:
+                return self.db.query(model).filter(model.__getattribute__(id_column) == identifier).first()
+        elif type(identifier) == int:
+            return self.db.query(model).get(identifier)
+        return None
+
 
 class PageDatastore(object):
     def __init__(self, page_model):
         self.page_model = page_model
 
     def _create_page_defaults(self, **kwargs):
-        kwargs.setdefault('active', True)
-        kwargs.setdefault('hidden', False)
-        kwargs.setdefault('vertical', False)
-        kwargs.setdefault('css_classes', 'nav')
+        # Nothing to do here yet, but I'm sure something will crop up.
         return kwargs
 
     def get_page(self, id_or_name):
+        raise NotImplementedError
+
+    def get_pages(self):
         raise NotImplementedError
 
     def create_page(self, **kwargs):
@@ -223,11 +233,17 @@ class SQLAlchemyPageDataStore(SQLAlchemyDatastore, PageDatastore):
         PageDatastore.__init__(self, page_model)
 
     def get_page(self, identifier):
-        if type(identifier) == int:
+        if type(identifier) == str:
+            if identifier.isdigit():
+                return self.db.query(self.page_model).get(int(identifier))
+            else:
+                return self.db.query(self.page_model).filter(self.page_model.name == identifier).first()
+        elif type(identifier) == int:
             return self.db.query(self.page_model).get(identifier)
-        elif type(identifier) == str:
-            return self.db.query(self.page_model).filter(self.page_model.name == identifier).first()
         return None
+
+    def get_pages(self):
+        return self.db.query(self.page_model).all()
 
 
 class PageMixin(object):
@@ -272,6 +288,9 @@ def create_blueprint(state, import_name):
                    subdomain=state.subdomain,
                    template_folder='templates')
 
+    for page in _datastore.get_pages():
+        bp.route(page.url, methods=['GET'], endpoint=state.page_endpoint)(render_page)
+
     return bp
 
 
@@ -290,6 +309,8 @@ class PageModel(Base):
     __tablename__ = 'fpages_page'
     id = Column(Integer(), primary_key=True)
     name = Column(String(256))
+    url = Column(String(256))
+    content = Column(Text)
 
 
 page_template = Template("")
