@@ -43,9 +43,15 @@ _default_config = {
     'DATABASE_URI': 'sqlite:///fpages.db',
     'DATABASE_TABLE_PREFIX': 'fpages',
     'SUBDOMAIN': None,
-    'URL_PREFIX': None,
+    'URL_PREFIX': '/pages',
     'BLUEPRINT_NAME': 'pages',
-    'RENDER_URL': '/'
+    'BLUEPRINT': None,
+    'RENDER_URL': '/',
+    'ADMIN_USES_APP_ROUTES': False,
+    'FLASH_MESSAGES': True,
+    # FEXADMIN == Flask-EXtensionAdmin (Coming Soon)
+    'ADMIN_USES_FEXADMIN': False,
+    'PAGE_ENDPOINT': 'page'
 }
 
 
@@ -81,6 +87,12 @@ class _PagesState(object):
         self.blueprint_name = ""
         self.url_prefix = ""
         self.subdomain = ""
+        self.render_url = "/"
+        self.admin_uses_app_routes = False
+        self.flash_messages = True
+        # FEXADMIN == Flask-EXtensionAdmin (Coming Soon)
+        self.admin_uses_fexadmin = False
+        self.page_endpoint = 'page'
         for key, value in kwargs.items():
             setattr(self, key.lower(), value)
 
@@ -122,10 +134,8 @@ class Pages(object):
             app.teardown_request(self.teardown)
 
         state = _get_state(app, datastore)
-
         if register_blueprint:
             app.register_blueprint(create_blueprint(state, __name__))
-            # app.context_processor(_context_processor)
 
         state.render_template = self.render_template
         app.extensions['pages'] = state
@@ -237,7 +247,7 @@ class SQLAlchemyPageDataStore(SQLAlchemyDatastore, PageDatastore):
             if identifier.isdigit():
                 return self.db.query(self.page_model).get(int(identifier))
             else:
-                return self.db.query(self.page_model).filter(self.page_model.name == identifier).first()
+                return self.db.query(self.page_model).filter(self.page_model.url_slug == identifier).first()
         elif type(identifier) == int:
             return self.db.query(self.page_model).get(identifier)
         return None
@@ -288,17 +298,16 @@ def create_blueprint(state, import_name):
                    subdomain=state.subdomain,
                    template_folder='templates')
 
-    for page in _datastore.get_pages():
-        bp.route(page.url, methods=['GET'], endpoint=state.page_endpoint)(render_page)
+    bp.route(state.render_url + slash_url_suffix(state.render_url, '<page>')
+             , methods=['GET'], endpoint=state.page_endpoint)(render_page)
 
     return bp
 
 
 def render_page(page=None):
-    if page is not None:
-        page_obj = _datastore.get_page(page)
-        if page_obj:
-            return page_template.render(page=page_obj, request_path=request.path, user=current_user, url_for=url_for)
+    page_obj = _datastore.get_page(page)
+    if page_obj:
+        return page_template.render(page=page_obj, request_path=request.path, user=current_user, url_for=url_for)
     return """Page Not Found"""
 
 page_metadata = MetaData()
@@ -309,8 +318,16 @@ class PageModel(Base):
     __tablename__ = 'fpages_page'
     id = Column(Integer(), primary_key=True)
     name = Column(String(256))
-    url = Column(String(256))
+    url_slug = Column(String(256))
     content = Column(Text)
 
 
-page_template = Template("")
+page_template = Template("{{ page.content }}")
+
+
+def slash_url_suffix(url, suffix):
+    """Adds a slash either to the beginning or the end of a suffix
+    (which is to be appended to a URL), depending on whether or not
+    the URL ends with a slash."""
+
+    return url.endswith('/') and ('%s/' % suffix) or ('/%s' % suffix)
