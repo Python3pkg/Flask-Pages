@@ -13,6 +13,7 @@
 ** will be met: https://www.gnu.org/licenses/lgpl.html.
 """
 from flask import Flask, redirect, url_for
+
 from flask_pages import Pages
 app = Flask(__name__)
 pages = Pages(app).init_app(app)
@@ -21,6 +22,7 @@ pages = Pages(app).init_app(app)
 @app.route("/")
 def hello():
     return redirect(url_for('pages.page', page="test"))
+
 
 if __name__ == "__main__":
     page = pages.datastore.create_page(name="test", url_slug="test", content="Hello World! Flask-Pages test...")

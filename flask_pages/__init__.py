@@ -17,15 +17,17 @@
     https://github.com/maxcountryman/flask-login and https://github.com/mattupstate/flask-security  See LICENSE
 """
 from flask import current_app, Blueprint, render_template, request, url_for
-from flask_sqlalchemy import SQLAlchemy
 from flask_security import current_user
-from werkzeug.local import LocalProxy
+from flask_sqlalchemy import SQLAlchemy
 from jinja2 import Template
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Text, create_engine, MetaData
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from ._compat import PY2, text_type
+from sqlalchemy import Column, Integer, String, Boolean, Text, create_engine, MetaData
 from sqlalchemy.engine.reflection import Inspector
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from werkzeug.local import LocalProxy
+
+from ._compat import PY2, text_type
+
 # Find the stack on which we want to store the database connection.
 # Starting with Flask 0.9, the _app_ctx_stack is the correct one,
 # before that we need to use the _request_ctx_stack.
@@ -51,7 +53,8 @@ _default_config = {
     'FLASH_MESSAGES': True,
     # FEXADMIN == Flask-EXtensionAdmin (Coming Soon)
     'ADMIN_USES_FEXADMIN': False,
-    'PAGE_ENDPOINT': 'page'
+    'PAGE_ENDPOINT': 'page',
+    'USES_FLASK_BS': True
 }
 
 
@@ -82,7 +85,6 @@ def _get_state(app, datastore, **kwargs):
 
 
 class _PagesState(object):
-
     def __init__(self, **kwargs):
         self.blueprint_name = ""
         self.url_prefix = ""
@@ -93,12 +95,12 @@ class _PagesState(object):
         # FEXADMIN == Flask-EXtensionAdmin (Coming Soon)
         self.admin_uses_fexadmin = False
         self.page_endpoint = 'page'
+        self.uses_flask_bs = True
         for key, value in kwargs.items():
             setattr(self, key.lower(), value)
 
 
 class Pages(object):
-
     def __init__(self, app=None, datastore=None, **kwargs):
         self.app = app
         self.datastore = datastore
@@ -140,6 +142,14 @@ class Pages(object):
         state.render_template = self.render_template
         app.extensions['pages'] = state
 
+        if state.uses_flask_bs:
+            if not app.extensions.get('bootstrap'):
+                try:
+                    from flask_bs import Bootstrap
+                    bs = Bootstrap(app).init_app(app)
+                except ImportError:
+                    print("WARNING: Could not locate Flask-BS in extensions nor import it")
+                    state.uses_flask_bs = False
         return state
 
     def render_template(self, *args, **kwargs):
@@ -238,6 +248,7 @@ class SQLAlchemyPageDataStore(SQLAlchemyDatastore, PageDatastore):
     """A SQLAlchemy datastore implementation for Flask-Pages that assumes the
     use of the Flask-SQLAlchemy extension.
     """
+
     def __init__(self, db, page_model):
         SQLAlchemyDatastore.__init__(self, db)
         PageDatastore.__init__(self, page_model)
@@ -307,13 +318,20 @@ def create_blueprint(state, import_name):
 def render_page(page=None, **kwargs):
     page_obj = _datastore.get_page(page)
     if page_obj:
+
         if page_obj.jinja2_template:
-            return Template(page_obj.content).render(page=page_obj, request_path=request.path, user=current_user,
-                                                     url_for=url_for, **kwargs)
+            rendered_page = Template(page_obj.content).render(page=page_obj, request_path=request.path,
+                                                              user=current_user, url_for=url_for, **kwargs)
         else:
-            return page_template.render(page=page_obj, request_path=request.path, user=current_user, url_for=url_for,
-                                        **kwargs)
+            rendered_page = page_template.render(page=page_obj, request_path=request.path, user=current_user,
+                                                 url_for=url_for, **kwargs)
+        if _page.uses_flask_bs:
+            from flask_bs import render_content_with_bootstrap
+            return render_content_with_bootstrap(body=rendered_page)
+        else:
+            return rendered_page
     return """Page Not Found"""
+
 
 page_metadata = MetaData()
 Base = declarative_base(metadata=page_metadata)
@@ -326,7 +344,6 @@ class PageModel(Base):
     url_slug = Column(String(256))
     content = Column(Text)
     jinja2_template = Column(Boolean, default=False)
-
 
 
 page_template = Template("{{ page.content }}")
