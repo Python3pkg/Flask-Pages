@@ -20,7 +20,7 @@ requirements = ['Flask', 'Flask-BS', 'Flask-Security', 'Flask-SQLAlchemy']
 
 setup(
     name="Flask-Pages",
-    version="0.1.0",
+    version="0.1.1",
     author="Bill Schumacher",
     author_email="bill@servernet.co",
     description="Another? flask extension that provides dynamic pages.",
