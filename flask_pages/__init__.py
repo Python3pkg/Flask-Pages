@@ -16,7 +16,7 @@
     Some code copied from:
     https://github.com/maxcountryman/flask-login and https://github.com/mattupstate/flask-security  See LICENSE
 """
-from flask import current_app, Blueprint, render_template, request, url_for
+from flask import current_app, Blueprint, redirect, render_template, request, url_for
 from flask_security import current_user
 from flask_sqlalchemy import SQLAlchemy
 from jinja2 import Template
@@ -318,6 +318,9 @@ def create_blueprint(state, import_name):
 def render_page(page=None, **kwargs):
     page_obj = _datastore.get_page(page)
     if page_obj:
+        if page_obj.login_required:
+            if not current_user.is_authenticated or current_user.is_anonymous:
+                return redirect(url_for('security.login'))
 
         if page_obj.jinja2_template:
             rendered_page = Template(page_obj.content).render(page=page_obj, request_path=request.path,
@@ -344,6 +347,9 @@ class PageModel(Base):
     url_slug = Column(String(256))
     content = Column(Text)
     jinja2_template = Column(Boolean, default=False)
+    login_required = Column(Boolean, default=False)
+    roles_required = Column(String)
+
 
 
 page_template = Template("{{ page.content }}")
