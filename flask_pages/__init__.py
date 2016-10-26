@@ -299,15 +299,20 @@ def create_blueprint(state, import_name):
                    template_folder='templates')
 
     bp.route(state.render_url + slash_url_suffix(state.render_url, '<page>')
-             , methods=['GET'], endpoint=state.page_endpoint)(render_page)
+             , methods=['GET', 'POST'], endpoint=state.page_endpoint)(render_page)
 
     return bp
 
 
 def render_page(page=None):
+    # TODO: Think of a clever way to add context processor to individual pages, dynamically.
     page_obj = _datastore.get_page(page)
     if page_obj:
-        return page_template.render(page=page_obj, request_path=request.path, user=current_user, url_for=url_for)
+        if page_obj.jinja2_template:
+            return Template(page_obj.content).render(page=page_obj, request_path=request.path, user=current_user,
+                                                     url_for=url_for)
+        else:
+            return page_template.render(page=page_obj, request_path=request.path, user=current_user, url_for=url_for)
     return """Page Not Found"""
 
 page_metadata = MetaData()
@@ -320,6 +325,7 @@ class PageModel(Base):
     name = Column(String(256))
     url_slug = Column(String(256))
     content = Column(Text)
+    jinja2_template = Column(Boolean, default=False)
 
 
 page_template = Template("{{ page.content }}")
