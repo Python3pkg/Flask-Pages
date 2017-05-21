@@ -63,7 +63,7 @@ def get_config(app):
     application without the annoying 'PAGES_' prefix.
     :param app: The application to inspect
     """
-    items = app.config.items()
+    items = list(app.config.items())
     prefix = 'PAGES_'
 
     def strip_prefix(tup):
@@ -73,7 +73,7 @@ def get_config(app):
 
 
 def _get_state(app, datastore, **kwargs):
-    for key, value in get_config(app).items():
+    for key, value in list(get_config(app).items()):
         kwargs[key.lower()] = value
 
     kwargs.update(dict(
@@ -96,7 +96,7 @@ class _PagesState(object):
         self.admin_uses_fexadmin = False
         self.page_endpoint = 'page'
         self.uses_flask_bs = True
-        for key, value in kwargs.items():
+        for key, value in list(kwargs.items()):
             setattr(self, key.lower(), value)
 
 
@@ -127,7 +127,7 @@ class Pages(object):
         if not page_model_created:
             Base.metadata.create_all()
 
-        for key, value in _default_config.items():
+        for key, value in list(_default_config.items()):
             app.config.setdefault('PAGES_' + key, value)
 
         if hasattr(app, 'teardown_appcontext'):
